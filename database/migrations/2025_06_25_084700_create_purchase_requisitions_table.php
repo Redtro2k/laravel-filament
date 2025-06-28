@@ -27,6 +27,7 @@ return new class extends Migration
             $table->datetime('approved_dt')->nullable();
             $table->foreignId('executed_by_id')->nullable()->constrained('users')->cascadeOnDelete();
             $table->dateTime('executed_at')->nullable();
+            $table->json('attachments');
             $table->timestamps();
         });
     }

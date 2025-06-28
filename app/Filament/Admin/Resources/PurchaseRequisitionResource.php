@@ -12,6 +12,8 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Forms\Set;
+use Filament\Forms\Get;
 
 class PurchaseRequisitionResource extends Resource
 {
@@ -45,12 +47,21 @@ class PurchaseRequisitionResource extends Resource
                         ->default(fn () => auth()->user()->hasRole('member') ? auth()->id() : null)
                         ->searchable()
                         ->preload()
+                        ->live(debounce: '1000')
+                        ->afterStateUpdated(function(Set $set, ?string $state){
+                            $set('prepared_by_id', $state);
+                        })
                         ->required(),
         
-                    Forms\Components\TextInput::make('priority')
+                    Forms\Components\Select::make('priority')
                         ->required()
-                        ->label('Priority Level'),
-        
+                        ->label('Priority Level')
+                        ->options([
+                            'low' => 'Low',
+                            'medium' => 'Medium',
+                            'high' => 'High',
+                            'urgent' => 'Urgent'
+                        ]),
                     Forms\Components\TextInput::make('pr_number')
                         ->label('PR Number')
                         ->required()
@@ -58,54 +69,84 @@ class PurchaseRequisitionResource extends Resource
         
                     Forms\Components\DateTimePicker::make('required_by_date')
                         ->label('Required By Date')
+                        ->native(false)
                         ->required(),
         
-                    Forms\Components\Textarea::make('comment')
+                    Forms\Components\RichEditor::make('comment')
                         ->label('Additional Notes / Comments')
                         ->required()
+                        ->disableToolbarButtons([
+                            'attachFiles'
+                        ])
                         ->columnSpanFull(),
                 ]),
         
             Forms\Components\Section::make('Approval and Status')
                 ->description('People involved and approval status of the requisition.')
                 ->schema([
-                    Forms\Components\TextInput::make('status')
+                    Forms\Components\Radio::make('status')
                         ->label('Request Status')
+                        ->options([
+                            'draft' => 'Draft',
+                            'pending' => 'Pending',
+                            'approved' => 'Approved',
+                            'rejected' => 'Rejected',
+                            'cancelled' => 'Cancelled',
+                            'completed' => 'Completed'
+                        ])
+                        ->inline()
+                        ->default('draft')
                         ->required(),
         
-                    Forms\Components\TextInput::make('prepared_by_id')
+                    Forms\Components\Select::make('prepared_by_id')
                         ->label('Prepared By (User ID)')
-                        ->required()
-                        ->numeric(),
+                        ->searchable()
+                        ->preload()
+                        ->relationship('preparer', 'name', fn($query) =>  $query->when(
+                            !auth()->user()->hasRole('super_admin'),
+                            fn ($query) => $query->whereHas('roles', fn ($q) =>
+                                $q->whereIn('name', ['member'])
+                            )
+                        ))
+                        ->required(),
         
-                    Forms\Components\DateTimePicker::make('prepared_dt')
-                        ->label('Date Prepared'),
         
-                    Forms\Components\TextInput::make('checked_by_id')
-                        ->label('Checked By (User ID)')
-                        ->required()
-                        ->numeric(),
+                    Forms\Components\Select::make('checked_by_id')
+                        ->label('Supervisor / Manager By (User ID)')
+                        ->relationship('checker', 'name', fn($query) => $query->whereHas('roles', fn($q) => $q->whereIn('name', ['checker'])))
+                        ->searchable()
+                        ->preload()
+                        ->required(),
         
-                    Forms\Components\DateTimePicker::make('checked_dt')
-                        ->label('Date Checked'),
-        
-                    Forms\Components\TextInput::make('approved_by_id')
-                        ->label('Approved By (User ID)')
-                        ->required()
-                        ->numeric(),
-        
-                    Forms\Components\DateTimePicker::make('approved_dt')
-                        ->label('Date Approved'),
-        
-                    Forms\Components\TextInput::make('executed_by_id')
-                        ->label('Executed By (User ID)')
-                        ->numeric(),
-        
-                    Forms\Components\DateTimePicker::make('executed_at')
-                        ->label('Date Executed'),
+                    Forms\Components\Select::make('approved_by_id')
+                        ->label('General Manager By (User ID)')
+                        ->relationship('mansor', 'name', fn($query) => $query->whereHas('roles', fn($q) => $q->whereIn('name', ['manager', 'supervisor'])))
+                        ->searchable()
+                        ->preload()
+                        ->required(),
+
+                    Forms\Components\Select::make('executed_by_id')
+                        ->label('Executive Manager By (User ID)')
+                        ->relationship('executive', 'name', fn($query) => $query->whereHas('roles', fn($q) => $q->whereIn('name', ['executive'])))
+                        ->searchable()
+                        ->preload()
+                        ->required(),
+            ]),
+            Forms\Components\Section::make('Files & Documents')
+                ->description('Kindly upload your PR document along with any other relevant files.')
+                ->schema([
+                    Forms\Components\FileUpload::make('attachments')
+                        ->label('Attach PR File(s)')
+                        ->multiple()
+                        ->directory('PR')
+                        ->preserveFilenames()
+                        ->reorderable()
+                        ->downloadable()
+                        ->panelLayout('grid')
+                        ->openable()
+                        ->previewable(true)
                 ]),
-            ]);
-        
+            ]);        
     }
 
     public static function table(Table $table): Table
@@ -115,7 +156,11 @@ class PurchaseRequisitionResource extends Resource
                 Tables\Columns\TextColumn::make('requester_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('priority'),
+
+                    
+                Tables\Columns\TextColumn::make('priority')
+                
+                ,
                 Tables\Columns\TextColumn::make('pr_number')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('required_by_date')
@@ -166,7 +211,8 @@ class PurchaseRequisitionResource extends Resource
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->paginated(true);
     }
 
     public static function getRelations(): array
