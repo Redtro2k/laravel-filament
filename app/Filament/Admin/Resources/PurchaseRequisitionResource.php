@@ -44,7 +44,8 @@ class PurchaseRequisitionResource extends Resource
                             )
                         )
                         ->disabled(fn () => auth()->user()->hasRole('member'))
-                        ->default(fn () => auth()->user()->hasRole('member') ? auth()->id() : null)
+                        ->dehydrated(fn () => auth()->user()->hasRole('member'))
+                        ->default(auth()->id())
                         ->searchable()
                         ->preload()
                         ->live(debounce: '1000')
@@ -67,7 +68,7 @@ class PurchaseRequisitionResource extends Resource
                         ->required()
                         ->maxLength(255),
         
-                    Forms\Components\DateTimePicker::make('required_by_date')
+                    Forms\Components\DatePicker::make('required_by_date')
                         ->label('Required By Date')
                         ->native(false)
                         ->required(),
@@ -96,6 +97,8 @@ class PurchaseRequisitionResource extends Resource
                         ])
                         ->inline()
                         ->default('draft')
+                        ->disabled(auth()->user()->hasRole('member'))
+                        ->dehydrated(auth()->user()->hasRole('member'))
                         ->required(),
         
                     Forms\Components\Select::make('prepared_by_id')
@@ -125,7 +128,7 @@ class PurchaseRequisitionResource extends Resource
                         ->preload()
                         ->required(),
 
-                    Forms\Components\Select::make('executed_by_id')
+                    Forms\Components\Select::make('executive_by_id')
                         ->label('Executive Manager By (User ID)')
                         ->relationship('executive', 'name', fn($query) => $query->whereHas('roles', fn($q) => $q->whereIn('name', ['executive'])))
                         ->searchable()
@@ -145,6 +148,7 @@ class PurchaseRequisitionResource extends Resource
                         ->panelLayout('grid')
                         ->openable()
                         ->previewable(true)
+                        ->required()
                 ]),
             ]);        
     }
@@ -176,21 +180,13 @@ class PurchaseRequisitionResource extends Resource
                 Tables\Columns\TextColumn::make('checked_by_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('checked_dt')
-                    ->dateTime()
-                    ->sortable(),
                 Tables\Columns\TextColumn::make('approved_by_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('approved_dt')
-                    ->dateTime()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('executed_by_id')
+                Tables\Columns\TextColumn::make('executive_id')
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('executed_at')
-                    ->dateTime()
-                    ->sortable(),
+
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

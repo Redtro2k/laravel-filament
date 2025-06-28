@@ -24,6 +24,13 @@ class SupplierResource extends Resource
 
     protected static ?string $navigationGroup = "Purchasing Officer";
 
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['cb_name', 'contact_name'];
+    }
+
+
+
     public static function getPermissionPrefixes(): array
     {
         return [
